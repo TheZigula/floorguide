@@ -14,7 +14,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Non-root from the start. Nothing in this service writes outside /app, and root is not needed to serve HTTP.
-RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser
+#
+# The chown of /app ITSELF is load-bearing, not tidiness. `WORKDIR /app` creates the directory as
+# root:root 755, and `COPY --chown` below only sets ownership of the files placed INSIDE it. Without
+# this, appuser cannot create new files in /app, and the app dies at import with
+# `sqlite3.OperationalError: unable to open database file` when SqliteSaver opens ./checkpoints.db.
+# backend/ingest.py needs the same write permission to create ./chroma at startup.
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser \
+ && chown appuser:appuser /app
 
 # Dependencies in their own layer, before the code, so editing a route does not re-resolve the whole stack.
 COPY requirements.txt ./

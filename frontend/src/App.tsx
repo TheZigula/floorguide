@@ -178,28 +178,36 @@ export default function App() {
     [approvals, patchApproval, threadId],
   );
 
-  /** Hang each approval card on the turn that produced it, so the transcript keeps its history. */
-  const renderedTurns = useMemo(
-    () =>
-      turns.map((turn) => {
-        const entry = turn.approvalDraftId ? approvals[turn.approvalDraftId] : undefined;
-        if (!entry) return turn;
-        return {
-          ...turn,
-          slot: (
-            <ApprovalCard
-              approval={entry.approval}
-              busy={busy}
-              settled={entry.settled}
-              error={entry.error}
-              onApprove={() => handleApprove(entry.approval.draft_id)}
-              onReject={() => handleReject(entry.approval.draft_id)}
-            />
-          ),
-        };
-      }),
-    [turns, approvals, busy, handleApprove, handleReject],
-  );
+  /**
+   * Hang each approval card on the turn that produced it, so the transcript keeps its history.
+   * A thread paused at the gate re-returns the SAME draft on every later turn, so the card goes
+   * only on the most recent turn carrying that draft id — never two live Approve buttons at once.
+   */
+  const renderedTurns = useMemo(() => {
+    const lastTurnForDraft = new Map<string, string>();
+    for (const turn of turns) {
+      if (turn.approvalDraftId) lastTurnForDraft.set(turn.approvalDraftId, turn.id);
+    }
+    return turns.map((turn) => {
+      const entry = turn.approvalDraftId ? approvals[turn.approvalDraftId] : undefined;
+      if (!entry || lastTurnForDraft.get(turn.approvalDraftId!) !== turn.id) {
+        return { ...turn, approvalDraftId: undefined };
+      }
+      return {
+        ...turn,
+        slot: (
+          <ApprovalCard
+            approval={entry.approval}
+            busy={busy}
+            settled={entry.settled}
+            error={entry.error}
+            onApprove={() => handleApprove(entry.approval.draft_id)}
+            onReject={() => handleReject(entry.approval.draft_id)}
+          />
+        ),
+      };
+    });
+  }, [turns, approvals, busy, handleApprove, handleReject]);
 
   function startNewConversation() {
     setThreadId(newThreadId());

@@ -297,7 +297,26 @@ def retriever_node(state: FloorGuideState) -> dict:
         category = next((c for c in ("safety", "maintenance", "quality") if c in raw), "maintenance")
 
     found = call_tool("retriever", "vector_search", query=question, category=category, k=4)
-    hits, dropped, backend = found["hits"], found["dropped"], found["source_backend"]
+    dropped, backend = found["dropped"], found["source_backend"]
+
+    # Asset records are structured data, not prose authority: the analyst reads them as fields,
+    # and the retriever never answers out of one. Dropping them here also keeps routed_to inside
+    # the three labels a supervisor recognises.
+    hits = [h for h in found["hits"] if h["category"] != "asset_record"]
+
+    # The label follows the source ACTUALLY USED, not the guess made before searching, so
+    # "Routed to: Safety procedures" is true even when the classifier guessed maintenance.
+    used = hits[0]["category"] if hits else None
+    if used in ("safety", "maintenance", "quality"):
+        label = used
+    elif hits:
+        log.warning("best hit %s has category %r; labelling with the guess", hits[0]["source_id"], used)
+        label = category
+    else:
+        label = "refused"
+    if hits and label != category:
+        log.info("routed_to corrected from the %s guess to %s, the shelf the answer came from",
+                 category, label)
 
     sources = [
         {
@@ -336,10 +355,12 @@ def retriever_node(state: FloorGuideState) -> dict:
             "step, and I cannot approve one. Here is what the procedure actually requires:\n\n" + body
         )
         refused = True
+        if label == "refused":
+            label = "safety"   # the lane is still the safety procedures, even with nothing found
 
     return {
         "worker": "retriever",
-        "routed_to": category,
+        "routed_to": label,
         "answer": answer,
         "sources": sources,
         "dropped_chunks": dropped,

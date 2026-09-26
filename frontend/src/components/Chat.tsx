@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { RoutedTo } from "../types";
+import { AnswerText } from "./AnswerText";
 import { RoutedToChip } from "./RoutedToChip";
 import { StatusLine, type Phase } from "./StatusLine";
 
@@ -18,14 +19,6 @@ export interface Turn {
   approvalDraftId?: string;
   /** Anything the turn should carry inline, e.g. the approval card. */
   slot?: ReactNode;
-}
-
-/** Split an answer on blank lines so paragraphs survive; no markdown, no HTML, no dangerouslySetInnerHTML. */
-function paragraphs(text: string): string[] {
-  return text
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean);
 }
 
 function TurnView({ turn }: { turn: Turn }) {
@@ -54,9 +47,7 @@ function TurnView({ turn }: { turn: Turn }) {
           {turn.routedTo ? <RoutedToChip routedTo={turn.routedTo} /> : null}
           {turn.refused ? <span className="chip chip--refusal-flag">Refusal</span> : null}
         </div>
-        {paragraphs(turn.text).map((block, index) => (
-          <p key={index}>{block}</p>
-        ))}
+        <AnswerText text={turn.text} />
         {turn.slot}
       </div>
     </div>

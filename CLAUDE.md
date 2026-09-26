@@ -178,6 +178,12 @@ A floor supervisor at a plant asks a question in plain words; FloorGuide routes 
         ("Vercel Authentication") was on for the team scope, so the production URL served a Vercel login page with HTTP 200. A 200 check would have
         recorded a login wall as a pass; the title check caught it. Switched off in the dashboard (Project Settings > Deployment Protection).
 
+    ### The shelf guess is a hint, never a wall (minute 58 finding)
+        The retriever's category classifier sent "what are the lockout steps for P-102" to maintenance because it named a machine, so the filtered
+        search found nothing and the retriever refused a question the corpus answers. Rule: search the guessed category first; if the top result is
+        empty or below the similarity floor, search ALL categories; `routed_to` is the category of the best source actually used, so the label on
+        screen is always true. Refuse only when the unfiltered search also finds nothing.
+
 ## Don't
 - Never print, cat, or open `.env` on screen. Never commit it. `.gitignore` is the first commit.
 - No hand-typed code. Prompts and this file may be typed.

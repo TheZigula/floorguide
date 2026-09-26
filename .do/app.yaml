@@ -38,10 +38,12 @@ services:
       failure_threshold: 5
 
     envs:
-      # Non-secret configuration only. The Vercel origin is appended here once Vercel prints it.
+      # Non-secret configuration only. The two API keys are NOT here by design: they are added
+      # as encrypted variables on the component in the dashboard, so they never enter the repo.
+      # Vercel origin first, then localhost so a local front end still works against this backend.
       - key: CORS_ORIGINS
         scope: RUN_TIME
-        value: "http://localhost:5173"
+        value: "https://floorguide.vercel.app,http://localhost:5173"
       - key: ROUTER_MODEL
         scope: RUN_TIME
         value: "claude-haiku-4-5"

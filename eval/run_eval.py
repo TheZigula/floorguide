@@ -82,6 +82,9 @@ METRIC_ARGS = {
 RETRIEVAL_METRICS = ("faithfulness", "answer_relevancy", "context_precision_with_reference")
 CONTROL_METRICS = ("faithfulness",)
 
+# The judge's own output budget. See the comment where the llm is built.
+JUDGE_MAX_OUTPUT_TOKENS = 4096
+
 
 # --- logging hygiene -----------------------------------------------------------------------------
 
@@ -271,8 +274,34 @@ class ContextBuilder:
         except Exception as exc:
             self.detail = f"index unavailable ({type(exc).__name__}: {exc}); snippets used instead"
 
+    @staticmethod
+    def _body_of(text: str, source_id: str, title: str) -> str:
+        """Drop the "[SOURCE_ID] Title" header ingest puts on EVERY chunk of a document.
+
+        That header is identical across a document's chunks, so matching on the leading characters
+        of a snippet matches the document's first chunk every time. Measured, not theorised: it
+        silently collapsed three distinct MM-P102 passages into one and handed the judge Sec 1 while
+        scoring an answer about Sec 4.2, which cost a correct answer two thirds of its faithfulness.
+        """
+        norm = re.sub(r"\s+", " ", text or "").strip()
+        header = re.sub(r"\s+", " ", f"[{source_id}] {title or ''}").strip()
+        if header and norm.startswith(header):
+            return norm[len(header):].strip()
+        stripped = re.sub(r"^\[[^\]]*\]\s*", "", norm)
+        norm_title = re.sub(r"\s+", " ", title or "").strip()
+        if norm_title and stripped.startswith(norm_title):
+            stripped = stripped[len(norm_title):].strip()
+        return stripped
+
     def build(self, sources: List[Dict[str, Any]]) -> Tuple[List[str], List[str], List[str]]:
-        """Returns (contexts, used_source_ids, excluded_source_ids)."""
+        """Returns (contexts, used_source_ids, excluded_source_ids).
+
+        One context per DISTINCT retrieved chunk. The snippet is matched to its chunk on the
+        distinctive body text, never on the shared header, and a snippet whose chunk cannot be found
+        is used as-is rather than replaced by some other passage of the same document: substituting
+        a different passage would be worse than a short one, because the score would look precise
+        and mean nothing.
+        """
         contexts: List[str] = []
         used: List[str] = []
         excluded: List[str] = []
@@ -282,15 +311,12 @@ class ContextBuilder:
                 excluded.append(source_id)
                 continue
             snippet = str(source.get("snippet", "") or "")
+            probe = self._body_of(snippet, source_id, str(source.get("title", "")))[:90]
             text = snippet
-            candidates = self.by_source.get(source_id, [])
-            if candidates:
-                probe = re.sub(r"\s+", " ", snippet).strip()[:60]
-                match = next(
-                    (c for c in candidates if probe and re.sub(r"\s+", " ", c).find(probe) != -1),
-                    None,
-                )
-                text = match or candidates[0]
+            for candidate in self.by_source.get(source_id, []):
+                if probe and re.sub(r"\s+", " ", candidate).find(probe) != -1:
+                    text = candidate
+                    break
             if text and text not in contexts:
                 contexts.append(text)
                 used.append(source_id)
@@ -462,7 +488,13 @@ async def score_modern(
     )
 
     client = AsyncOpenAI()
-    llm = llm_factory(judge_model, client=client)
+    # Faithfulness first breaks an answer into its claims, and a thorough multi-claim answer (the
+    # grinding-noise one lists four checks plus a lockout warning) overruns the factory's default
+    # output budget: the judge returns IncompleteOutputException and the row cannot be scored, which
+    # fail-closed correctly turns into exit 1. Measured here, not guessed: at the default it threw,
+    # at 4096 the same row scores. Giving the judge room is the fix; suppressing the exception and
+    # calling an unscored row a pass would be the bug.
+    llm = llm_factory(judge_model, client=client, max_tokens=JUDGE_MAX_OUTPUT_TOKENS)
     embeddings = embedding_factory(
         provider="openai", model="text-embedding-3-small", client=client
     )
@@ -674,6 +706,8 @@ def main() -> int:
             "pending_approval_present": bool(response.get("pending_approval")),
             "judge_context_source_ids": used,
             "judge_context_excluded_source_ids": excluded,
+            "judge_context_chunks": len(contexts),
+            "judge_context_chars": sum(len(c) for c in contexts),
             "checks": [],
             "reported": {},
             "scores": {},

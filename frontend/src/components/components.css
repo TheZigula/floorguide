@@ -572,3 +572,47 @@
   color: var(--danger);
   border: 1px solid var(--danger);
 }
+
+/* --- answer formatting: the small slice of Markdown the backend emits ---- */
+.answer__heading {
+  font-weight: 700;
+  margin-bottom: 0.4em;
+}
+
+.answer__list {
+  margin: 0 0 0.7em;
+  padding-left: 1.4em;
+  white-space: normal;
+}
+
+.answer__list li {
+  margin-bottom: 0.25em;
+}
+
+.answer__tablewrap {
+  overflow-x: auto;
+  margin: 0 0 0.8em;
+}
+
+.answer__table {
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  min-width: 100%;
+}
+
+.answer__table th,
+.answer__table td {
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  text-align: left;
+  white-space: normal;
+}
+
+.answer__table th {
+  background: var(--paper);
+  font-weight: 650;
+}
+
+.source__snippet + .source__snippet {
+  margin-top: -2px;
+}

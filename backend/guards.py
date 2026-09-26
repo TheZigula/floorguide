@@ -296,7 +296,9 @@ _SCRUBBERS: tuple[tuple[re.Pattern, Optional[str]], ...] = (
     (re.compile(r"(?<!\d)(\+?\d[\d\s().-]{8,}\d)(?!\d)"), None),  # handled by _phone_sub
 )
 
-_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# Anything CONTAINING a date is not a phone number. The formatted log line carries its own
+# timestamp ("2026-09-26 13:03:50,254"), and an earlier version redacted the first half of it.
+_LOOKS_LIKE_DATE = re.compile(r"\d{4}-\d{1,2}-\d{1,2}")
 
 
 def _phone_sub(match: "re.Match") -> str:
@@ -305,7 +307,7 @@ def _phone_sub(match: "re.Match") -> str:
     service harder to debug for no gain in safety."""
     candidate = match.group(0)
     digits = sum(ch.isdigit() for ch in candidate)
-    if digits < 10 or _ISO_DATE.match(candidate.strip()):
+    if digits < 10 or _LOOKS_LIKE_DATE.search(candidate):
         return candidate
     return "[phone redacted]"
 
@@ -318,33 +320,44 @@ def scrub(text: str) -> str:
     return out
 
 
-class ScrubbingFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
+class ScrubbingFormatter(logging.Formatter):
+    """Wraps a handler's existing formatter and scrubs whatever it produced.
+
+    It deliberately does NOT rewrite record.msg or clear record.args. An earlier version did,
+    and it broke uvicorn's access log: AccessFormatter unpacks record.args into five values,
+    so clearing them raised inside logging on every request. Scrubbing the formatted string
+    instead leaves every other formatter intact and also covers the timestamp, the logger
+    name and any exception text.
+    """
+
+    def __init__(self, inner: logging.Formatter) -> None:
+        super().__init__()
+        self.inner = inner
+
+    def format(self, record: logging.LogRecord) -> str:
         try:
-            record.msg = scrub(record.getMessage())
-            record.args = ()
+            return scrub(self.inner.format(record))
         except Exception:  # noqa: BLE001 - a scrubber must never take the service down
-            record.msg = "[log line suppressed: it could not be scrubbed]"
-            record.args = ()
-        return True
+            return "[log line suppressed: it could not be scrubbed]"
 
 
-_SCRUBBER = ScrubbingFilter()
 _installed = False
 
 
 def install_log_scrubber() -> None:
-    """Attach the scrubber to every handler, including uvicorn's. Idempotent."""
+    """Wrap every handler's formatter, including uvicorn's. Idempotent, and safe to call again
+    after another library has added handlers of its own."""
     global _installed
     root = logging.getLogger()
     if not root.handlers:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    targets = list(root.handlers)
+    handlers = list(root.handlers)
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "fastapi"):
-        targets.extend(logging.getLogger(name).handlers)
-    for handler in targets:
-        if _SCRUBBER not in handler.filters:
-            handler.addFilter(_SCRUBBER)
+        handlers.extend(logging.getLogger(name).handlers)
+    for handler in handlers:
+        if isinstance(handler.formatter, ScrubbingFormatter):
+            continue
+        handler.setFormatter(ScrubbingFormatter(handler.formatter or logging.Formatter("%(message)s")))
     _installed = True
 
 

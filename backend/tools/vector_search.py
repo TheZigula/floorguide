@@ -45,12 +45,41 @@ SWEEP_MARGIN = 1.10
 # Used only when the filtered pass returned nothing at all, so there is no relative yardstick.
 SWEEP_FALLBACK_DISTANCE = 0.60
 
+# THE SHELF GUESS IS A HINT, NEVER A WALL (CLAUDE.md, minute 58). A category guess narrows the
+# search; it does not get to hide the answer. If the best chunk on the guessed shelf is missing
+# or further away than this floor, the search widens to every category and re-ranks.
+# The floors are per backend because the two embedding models put their distances on different
+# scales, and they are MEASURED against this corpus, not guessed: on corpus_openai a
+# right-shelf answer lands at 0.29-0.49 and the known misroute (lockout steps sent to
+# maintenance) sat at 0.580 while SP-01 was 0.371 unfiltered; on corpus_local the same pair was
+# 0.909 and 0.864. Widening is cheap and safe: it merges and re-ranks by distance, so a good
+# filtered hit still wins, and routed_to follows whichever source is actually used.
+SIMILARITY_FLOOR = {
+    "openai": float(os.getenv("SIMILARITY_FLOOR_OPENAI", "0.50")),
+    "local": float(os.getenv("SIMILARITY_FLOOR_LOCAL", "0.85")),
+}
+
 
 @lru_cache(maxsize=1)
 def _client():
-    import chromadb
+    """One Chroma client per process.
 
-    return chromadb.PersistentClient(path=CHROMA_DIR)
+    chromadb 1.5.9 caches a client per path and REFUSES a second one for the same path with
+    different settings ("An instance of Chroma already exists for ... with different
+    settings"). backend/ingest.py runs in this same process at startup and builds its client
+    with Settings(anonymized_telemetry=False), so this matches it; if some other caller got
+    there first with different settings, fall back rather than leave the search dead.
+    """
+    import chromadb
+    from chromadb.config import Settings
+
+    try:
+        return chromadb.PersistentClient(path=CHROMA_DIR, settings=Settings(anonymized_telemetry=False))
+    except ValueError as exc:
+        if "already exists" not in str(exc):
+            raise
+        log.warning("reusing the Chroma client already built for %s (%s)", CHROMA_DIR, exc)
+        return chromadb.PersistentClient(path=CHROMA_DIR)
 
 
 @lru_cache(maxsize=1)
@@ -145,7 +174,7 @@ def vector_search(
     backend, embedding = _embed(query)
     if embedding is None or len(embedding) == 0:
         log.error("no embedding backend available; returning no hits")
-        return {"hits": [], "dropped": 0, "source_backend": backend}
+        return _result([], 0, backend, False, category)
 
     collection_name = OPENAI_COLLECTION if backend == "openai" else LOCAL_COLLECTION
     ef = _openai_ef() if backend == "openai" else _local_ef()
@@ -153,27 +182,61 @@ def vector_search(
         collection = _get_collection(collection_name, ef)
     except Exception as exc:  # noqa: BLE001 - a missing collection is a normal cold start
         log.error("collection %s unavailable: %s", collection_name, exc)
-        return {"hits": [], "dropped": 0, "source_backend": backend}
+        return _result([], 0, backend, False, category)
 
-    candidates = _rows(_query(collection, embedding, k, category), backend)
-    kept, dropped = guards.screen_chunks(candidates)
+    # The whole-corpus neighbourhood is fetched either way: it is the widened search when the
+    # shelf guess misses, and the screen sweep when it holds. One embedding, two index lookups.
+    unfiltered = _rows(_query(collection, embedding, k, None), backend)
 
-    if category:
-        # The screen sweep. Same query, no filter, screened but never answered from.
-        seen = {row["chunk_id"] for row in candidates}
-        sweep = [r for r in _rows(_query(collection, embedding, k, None), backend)
-                 if r["chunk_id"] not in seen]
-        cutoff = max((r["distance"] for r in candidates), default=None)
+    if not category:
+        kept, dropped = guards.screen_chunks(unfiltered)
+        return _result(kept[:k], dropped, backend, False, None)
+
+    filtered = _rows(_query(collection, embedding, k, category), backend)
+    kept, dropped = guards.screen_chunks(filtered)
+    floor = SIMILARITY_FLOOR.get(backend, SIMILARITY_FLOOR["openai"])
+
+    if kept and kept[0]["distance"] <= floor:
+        # The guess held. Screen the wider neighbourhood anyway, so an instruction-shaped
+        # document is still caught and counted even though the category filter hid it.
+        seen = {row["chunk_id"] for row in filtered}
+        cutoff = max((r["distance"] for r in filtered), default=None)
         limit = cutoff * SWEEP_MARGIN if cutoff is not None else SWEEP_FALLBACK_DISTANCE
-        _, swept_out = guards.screen_chunks([r for r in sweep if r["distance"] <= limit])
-        dropped += swept_out
+        _, swept_out = guards.screen_chunks(
+            [r for r in unfiltered if r["chunk_id"] not in seen and r["distance"] <= limit]
+        )
+        return _result(kept[:k], dropped + swept_out, backend, False, category)
 
-    hits = kept[:k]
+    # The guess was a hint, not a wall. Nothing on that shelf, or nothing close enough: search
+    # every category and re-rank. Refusing here would refuse a question the corpus answers.
     log.info(
-        "vector_search backend=%s category=%s k=%s hits=%s dropped=%s",
-        backend, category, k, len(hits), dropped,
+        "widening past the %s shelf (best kept %s, floor %s); searching every category",
+        category,
+        format(kept[0]["distance"], ".3f") if kept else "none",
+        format(floor, ".2f"),
     )
-    return {"hits": hits, "dropped": dropped, "source_backend": backend}
+    merged: dict = {}
+    for row in filtered + unfiltered:
+        merged.setdefault(row["chunk_id"], row)
+    ordered = sorted(merged.values(), key=lambda r: r["distance"])
+    kept, dropped = guards.screen_chunks(ordered)
+    return _result(kept[:k], dropped, backend, True, category)
+
+
+def _result(hits: list[dict], dropped: int, backend: str, widened: bool, guess: Optional[str]) -> dict:
+    """`category_used` is the category of the BEST SOURCE ACTUALLY USED, so the label the screen
+    shows is always true, rather than the category a classifier guessed before searching."""
+    log.info(
+        "vector_search backend=%s guess=%s widened=%s hits=%s dropped=%s used=%s",
+        backend, guess, widened, len(hits), dropped, hits[0]["category"] if hits else None,
+    )
+    return {
+        "hits": hits,
+        "dropped": dropped,
+        "source_backend": backend,
+        "widened": widened,
+        "category_used": hits[0]["category"] if hits else None,
+    }
 
 
 def _embed(query: str) -> tuple[str, Any]:

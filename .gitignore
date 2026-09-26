@@ -15,6 +15,10 @@ __pycache__/
 # Generated local stores (rebuilt by backend/ingest.py and by the LangGraph checkpointer)
 chroma/
 *.db
+# SqliteSaver runs in WAL mode, which writes these two sidecars next to checkpoints.db.
+# `*.db` does NOT match them, and both showed up untracked at the first checkpoint.
+*.db-shm
+*.db-wal
 *.log
 
 # Deploy tooling local state
