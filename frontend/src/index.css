@@ -1,0 +1,112 @@
+/* index.css — the design tokens and base element styles for the whole app. */
+/* Owns: colours, spacing, type scale, and the reset; no component belongs here. */
+
+:root {
+  /* Plain-language palette: a plant floor screen, readable in bright light. */
+  --ink: #12181f;
+  --ink-soft: #4a5663;
+  --ink-faint: #74808d;
+  --paper: #f4f6f8;
+  --card: #ffffff;
+  --line: #d9dee4;
+  --line-strong: #b7c0ca;
+
+  --accent: #1f5fa8;
+  --accent-soft: #e8f0fa;
+
+  --safety: #b3261e;
+  --safety-soft: #fdecea;
+  --maintenance: #8a5a00;
+  --maintenance-soft: #fdf3e0;
+  --quality: #1f6b4a;
+  --quality-soft: #e7f4ee;
+  --rule: #3b4a99;
+  --rule-soft: #ecefff;
+  --work: #7a3ba8;
+  --work-soft: #f4ecfb;
+  --memory: #0f6f78;
+  --memory-soft: #e4f4f5;
+
+  --warn: #8a5a00;
+  --warn-soft: #fff6e2;
+  --danger: #b3261e;
+  --danger-soft: #fdecea;
+  --ok: #1f6b4a;
+  --ok-soft: #e7f4ee;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --gap: 16px;
+  --shadow: 0 1px 2px rgba(18, 24, 31, 0.08), 0 4px 16px rgba(18, 24, 31, 0.06);
+
+  font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--paper);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 360px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+p {
+  margin: 0 0 0.6em;
+}
+
+p:last-child {
+  margin-bottom: 0;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+  padding: 8px 14px;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+button:focus-visible,
+textarea:focus-visible,
+input:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+code {
+  font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 0.92em;
+}

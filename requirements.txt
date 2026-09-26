@@ -1,0 +1,27 @@
+# requirements.txt -- owns the Python pins for the whole prototype; exact versions verified
+# on this machine (CLAUDE.md Pins block, Sep 26 2026). Append your pins; never rewrite another line.
+
+# --- backend service (instance 1) ---
+fastapi==0.128.2
+uvicorn==0.40.0
+pydantic==2.12.5
+python-dotenv==1.2.1
+
+# --- graph, memory, models (instance 1) ---
+langgraph==1.0.10
+langgraph-checkpoint==4.2.0
+langgraph-checkpoint-sqlite==3.1.1
+langchain-core==1.6.5
+langchain-anthropic==1.3.0
+langchain-openai==1.1.6
+anthropic==0.75.0
+openai==2.14.0
+
+# --- vectors (instances 1 and 3) ---
+chromadb==1.5.9
+
+# --- eval (instance 3) ---
+ragas==0.4.3
+
+# --- security gate (all instances, run before every push) ---
+detect-secrets==1.5.0

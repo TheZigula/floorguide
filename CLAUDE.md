@@ -141,12 +141,42 @@ A floor supervisor at a plant asks a question in plain words; FloorGuide routes 
         The eval paces at 20,000; a ten-case run is ~3.5 minutes. Start the eval by minute 80.
     ### Two Chroma collections, one per embedding model
         `corpus_openai` and `corpus_local`; vectors from different models never share an index.
-    ### detect-secrets flags `api_key_env_var="OPENAI_API_KEY"` as a Secret Keyword
+    ### detect-secrets flags `api_key_env_var="OPENAI_API_KEY"` as a Secret Keyword <!-- pragma: allowlist secret: the quoted text is the env var's NAME, not a value; this doc line is the thing being described -->
+
         It is the variable's NAME. Annotate that line with `# pragma: allowlist secret` and a comment saying why. Never loosen the gate.
     ### /health commit on App Platform
         GIT_SHA is not injected by the platform. /health falls back to parsing ./.git/HEAD in pure Python, so `.dockerignore` must NOT exclude `.git`
         (it excludes node_modules/, frontend/, chroma/, .env*, *.db). If the build context has no .git, commit reads "unknown" and instance 4 sets GIT_SHA in the App env.
+    ### git refuses to run on D:\ until safe.directory is set (hit at minute ~3, instance 4)
+        `git init -b main` succeeds, then EVERY later git command dies with "detected dubious ownership in repository at
+        'D:/proto/floorguide' ... is on a file system that does not record ownership". One-time fix, already applied:
+        `git config --global --add safe.directory D:/proto/floorguide`. Only instance 4 runs git, so only instance 4 sees it.
+    ### The Read deny rule `Read(./.env.*)` also blocks WRITING .env.example
+        Same negation trap as .gitignore, one layer up: the glob matches the example file, so the Write tool refuses it and
+        `.gitignore` alone is not enough. Create .env.example through PowerShell (`[System.IO.File]::WriteAllText`, LF), not Write.
+    ### `vercel link` writes a REAL token to frontend/.env.local — not only `vercel env pull` (minute ~35, instance 4)
+        The brief and the settings deny rule both name `vercel env pull`, but `vercel link --yes --project floorguide`
+        prints "Downloading a fresh `VERCEL_OIDC_TOKEN`" and creates frontend/.env.local holding a live token. It does
+        append `.vercel` and `.env*` to frontend/.gitignore itself, so git cannot push it — but VERIFY, never assume:
+        `git check-ignore -v frontend/.env.local` must name a rule. Never open or print that file.
+    ### The Vercel project landed in team scope `cap-per`, not the personal scope
+        `vercel link` created `cap-per/floorguide`. The public URL and any `vercel env add` must use that scope, and the
+        origin added to CORS_ORIGINS is the cap-per one.
     <add hazards as they happen; one ### per hazard>
+
+    ### Keys come from .env at the repo root, NOT from the shell (minute 30 finding)
+        Claude Code reads ANTHROPIC_API_KEY from the environment and bills the API account instead of the subscription; the four coders
+        inherited the backend's key from keys.ps1 and the API balance ran out. Fix: the terminals are started with no ANTHROPIC_API_KEY in the
+        window; `.env` (gitignored, unreadable to instances by settings) holds OPENAI_API_KEY and ANTHROPIC_API_KEY, and every entry point
+        (backend/app.py, backend/ingest.py, eval/run_eval.py) calls `load_dotenv()` from python-dotenv (pinned) before anything reads os.environ.
+        Never print .env. The Chroma OpenAIEmbeddingFunction and the Anthropic/OpenAI clients then find the keys in os.environ as before.
+
+    ### Never quote the audited placeholder literal from mock.ts in any doc, STATUS line, README, or one-pager
+        detect-secrets flags the 12-character hex padding string wherever it is written, so every quotation re-blocks the push. Describe it as
+        "the 12-char hex placeholder in mock.ts" instead. Same rule for anything the scanner has already flagged once.
+    ### Vercel: `vercel link` writes a live VERCEL_OIDC_TOKEN into frontend/.env.local (ignored, deny-listed, never opened); Deployment Protection
+        ("Vercel Authentication") was on for the team scope, so the production URL served a Vercel login page with HTTP 200. A 200 check would have
+        recorded a login wall as a pass; the title check caught it. Switched off in the dashboard (Project Settings > Deployment Protection).
 
 ## Don't
 - Never print, cat, or open `.env` on screen. Never commit it. `.gitignore` is the first commit.

@@ -1,0 +1,574 @@
+/* components.css — the styles for every component in this folder. */
+/* Owns: the look of the chat, the chips, the source cards, the rule card, the approval card, and the memory card. */
+
+/* --- shared -------------------------------------------------------------- */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.card__title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 12px 16px 0;
+}
+
+/* --- the Routed-to chip and its cousins ---------------------------------- */
+.chip {
+  display: inline-block;
+  font-size: 0.76rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.chip--safety { background: var(--safety-soft); color: var(--safety); border-color: var(--safety); }
+.chip--maintenance { background: var(--maintenance-soft); color: var(--maintenance); border-color: var(--maintenance); }
+.chip--quality { background: var(--quality-soft); color: var(--quality); border-color: var(--quality); }
+.chip--asset_record { background: var(--rule-soft); color: var(--rule); border-color: var(--rule); }
+.chip--rule { background: var(--rule-soft); color: var(--rule); border-color: var(--rule); }
+.chip--work_order { background: var(--work-soft); color: var(--work); border-color: var(--work); }
+.chip--memory { background: var(--memory-soft); color: var(--memory); border-color: var(--memory); }
+.chip--refused { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+.chip--refusal-flag { background: var(--danger); color: #fff; border-color: var(--danger); }
+.chip--plain { background: var(--paper); color: var(--ink-soft); border-color: var(--line-strong); }
+
+/* --- chat ---------------------------------------------------------------- */
+.chat {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.chat__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.chat__empty {
+  margin: auto 0;
+  color: var(--ink-soft);
+  max-width: 44rem;
+}
+
+.chat__empty h2 {
+  font-size: 1.1rem;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+.chat__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.suggestion {
+  background: var(--accent-soft);
+  border-color: #c3d8ef;
+  color: var(--accent);
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.turn--user {
+  align-items: flex-end;
+}
+
+.turn__who {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.bubble {
+  max-width: 54rem;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  line-height: 1.55;
+}
+
+.bubble--user {
+  background: var(--accent-soft);
+  border-color: #c3d8ef;
+}
+
+.bubble--assistant {
+  background: var(--card);
+}
+
+.bubble--refused {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  border-left-width: 5px;
+}
+
+.bubble--note {
+  background: var(--paper);
+  border-style: dashed;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  max-width: 100%;
+}
+
+.bubble__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+/* The backend writes numbered procedure steps on single newlines. Keep them as written:
+   paragraphs are split on blank lines, and pre-wrap preserves the line breaks inside one. */
+.bubble p {
+  white-space: pre-wrap;
+}
+
+/* --- status line --------------------------------------------------------- */
+.statusline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 20px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+}
+
+.statusline--awaiting_approval {
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 650;
+}
+
+.statusline--refused {
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 650;
+}
+
+.statusline--error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.statusline--computed {
+  background: var(--rule-soft);
+  color: var(--rule);
+}
+
+.statusline__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statusline__dot { animation: none; opacity: 1; }
+}
+
+/* --- composer ------------------------------------------------------------ */
+.composer {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--card);
+  align-items: flex-end;
+}
+
+.composer__input {
+  flex: 1 1 auto;
+  resize: none;
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+}
+
+.composer__send {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 650;
+  padding: 11px 22px;
+}
+
+.composer__send:hover:not(:disabled) {
+  background: #17497f;
+  color: #fff;
+}
+
+/* --- sources panel ------------------------------------------------------- */
+.sources__empty {
+  padding: 8px 16px 16px;
+  color: var(--ink-faint);
+  font-size: 0.9rem;
+}
+
+.sources__list {
+  list-style: none;
+  margin: 0;
+  padding: 10px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.source {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  background: var(--paper);
+}
+
+.source__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.source__id {
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+  margin-left: auto;
+}
+
+.source__title {
+  font-weight: 650;
+  font-size: 0.92rem;
+  margin-bottom: 6px;
+}
+
+.source__snippet {
+  margin: 0 0 8px;
+  padding-left: 10px;
+  border-left: 3px solid var(--line-strong);
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.source__backend {
+  font-size: 0.76rem;
+  color: var(--ink-faint);
+}
+
+.dropped {
+  margin: 10px 16px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--warn);
+  border-left-width: 5px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+/* --- rule card ----------------------------------------------------------- */
+.rulecard__body {
+  padding: 10px 16px 16px;
+}
+
+.rulecard__headline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.rulecard__asset {
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-family: "Cascadia Mono", Consolas, monospace;
+}
+
+.badge {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.badge--OK { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+.badge--DUE_SOON { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
+.badge--OVERDUE { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+
+.rulecard__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.rulecard__grid dt {
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  margin-bottom: 2px;
+}
+
+.rulecard__grid dd {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rulecard__note {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+/* --- memory card --------------------------------------------------------- */
+.memorycard__body {
+  padding: 10px 16px 16px;
+}
+
+.memorycard__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.memorycard__label {
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+}
+
+.memorycard__empty {
+  font-size: 0.86rem;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.memorycard__note {
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+  margin: 0;
+}
+
+/* --- approval card: the guardrail made visible --------------------------- */
+.approval {
+  margin-top: 14px;
+  border: 2px solid var(--warn);
+  border-radius: var(--radius);
+  background: var(--warn-soft);
+  padding: 14px 16px 16px;
+  box-shadow: 0 0 0 4px rgba(138, 90, 0, 0.09);
+}
+
+.approval--settled {
+  border-color: var(--line-strong);
+  background: var(--paper);
+  box-shadow: none;
+}
+
+.approval__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.approval__flag {
+  background: var(--warn);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: var(--radius-sm);
+}
+
+.approval--settled .approval__flag {
+  background: var(--ink-faint);
+}
+
+.approval__title {
+  font-size: 1rem;
+}
+
+.approval__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 16px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.approval__fields dt {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  margin-bottom: 2px;
+}
+
+.approval__fields dd {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.approval__mono {
+  font-family: "Cascadia Mono", Consolas, monospace;
+}
+
+.approval__faint {
+  color: var(--ink-faint);
+  font-size: 0.82rem !important;
+  font-weight: 500 !important;
+}
+
+.badge--priority-high { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+.badge--priority-normal { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
+.badge--priority-low { background: var(--paper); color: var(--ink-soft); border-color: var(--line-strong); }
+
+.approval__actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.approval__action {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.btn {
+  font-weight: 700;
+  padding: 12px 18px;
+  font-size: 1rem;
+  border-width: 2px;
+}
+
+.btn--approve {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #fff;
+}
+
+.btn--approve:hover:not(:disabled) {
+  background: #175338;
+  border-color: #175338;
+  color: #fff;
+}
+
+.btn--reject {
+  background: var(--card);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn--reject:hover:not(:disabled) {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.approval__consequence {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.approval__error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--danger);
+  border-left-width: 5px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.86rem;
+}
+
+.approval__outcome {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.approval__outcome--approved {
+  background: var(--ok-soft);
+  color: var(--ok);
+  border: 1px solid var(--ok);
+}
+
+.approval__outcome--rejected {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}

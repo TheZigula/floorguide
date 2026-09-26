@@ -1,0 +1,50 @@
+# .do/app.yaml — owns the DigitalOcean App Platform definition for the FloorGuide backend.
+# No secret VALUES live here. OPENAI_API_KEY and ANTHROPIC_API_KEY are set as encrypted env vars
+# on the component in the App Platform dashboard; this file names only non-secret configuration.
+#
+# HAZARD: `doctl apps update --spec` replaces the whole spec. Any env var that exists only in the
+# dashboard (the two keys) is REMOVED by an update from this file. Always `doctl apps spec get <id>`
+# into a scratch file, edit that, and update from it once the keys are set.
+
+name: floorguide
+region: nyc
+
+services:
+  - name: backend
+    # Dockerfile at the repo root; the build context is the whole repo so .git comes with it
+    # and /health can read the commit (App Platform does not inject GIT_SHA).
+    dockerfile_path: Dockerfile
+    source_dir: /
+
+    github:
+      repo: TheZigula/floorguide
+      branch: main
+      deploy_on_push: true
+
+    http_port: 8080
+    instance_count: 1
+    # 1 GiB. 512 MB is too small for Chroma plus the ONNX local-embedding fallback model.
+    instance_size_slug: basic-xs
+
+    health_check:
+      http_path: /health
+      # 90 s, not 60. The FastAPI lifespan calls instance 3's idempotent ensure_ingested() on boot,
+      # so the FIRST container start chunks and embeds the corpus before it can answer. A shorter
+      # delay kills the container mid-warm-up and it never finishes ingesting.
+      initial_delay_seconds: 90
+      period_seconds: 20
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 5
+
+    envs:
+      # Non-secret configuration only. The Vercel origin is appended here once Vercel prints it.
+      - key: CORS_ORIGINS
+        scope: RUN_TIME
+        value: "http://localhost:5173"
+      - key: ROUTER_MODEL
+        scope: RUN_TIME
+        value: "claude-haiku-4-5"
+      - key: AGENT_MODEL
+        scope: RUN_TIME
+        value: "claude-opus-5"

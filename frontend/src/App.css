@@ -1,0 +1,114 @@
+/* App.css — the page shell: header, the two-column layout, and the footer note. */
+/* Owns: layout only. Each component's own styles live beside it in components.css. */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--paper);
+}
+
+.app__header {
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  padding: 12px 20px 0;
+  flex: 0 0 auto;
+}
+
+.app__titlerow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.app__title {
+  font-size: 1.15rem;
+}
+
+.app__subtitle {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+.app__headeractions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.app__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr);
+  gap: var(--gap);
+  padding: var(--gap);
+  align-items: stretch;
+}
+
+.app__main,
+.app__rail {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.app__rail {
+  overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  .app__body {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .app__rail {
+    overflow-y: visible;
+  }
+
+  /* Without this the chat collapses to nothing once the columns stack. */
+  .app__main {
+    min-height: 60vh;
+  }
+}
+
+.app__banner {
+  margin: 10px -20px 0;
+  padding: 9px 20px;
+  background: var(--warn-soft);
+  border-top: 1px solid var(--warn);
+  color: var(--warn);
+  font-size: 0.86rem;
+}
+
+.health {
+  font-size: 0.76rem;
+  color: var(--ink-faint);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.health--mock {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.health--up {
+  background: var(--ok-soft);
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.health--down {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
+}

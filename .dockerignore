@@ -1,0 +1,20 @@
+# .dockerignore — owns what is kept OUT of the backend image build context.
+# .git is deliberately NOT excluded: /health falls back to parsing .git/HEAD for the commit,
+# because App Platform does not inject GIT_SHA (see CLAUDE.md, "/health commit on App Platform").
+
+# Front end ships to Vercel, not into this image
+frontend/
+node_modules/
+
+# Secrets never enter an image; they arrive as platform env vars
+.env
+.env.*
+!.env.example
+
+# Local state rebuilt at runtime, not baked in
+chroma/
+*.db
+*.log
+__pycache__/
+.venv/
+.vercel/
