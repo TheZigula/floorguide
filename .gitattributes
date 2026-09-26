@@ -1,0 +1,4 @@
+# .gitattributes — owns line endings for every file in this repo.
+# This box has core.autocrlf=true; without eol=lf a CRLF Dockerfile or shell script breaks in the Linux container.
+
+* text=auto eol=lf

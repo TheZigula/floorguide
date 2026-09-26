@@ -1,0 +1,21 @@
+# .gitignore — owns the list of paths git must never track in this repo.
+# Instance 4 (deploy/docs) owns this file; it lands in the first commit, before any secret can exist.
+
+# Secrets: the real env file and every variant, but NOT the example
+# (the negation must come after the globs, or .env.example is hidden too)
+.env
+.env.*
+!.env.example
+
+# Dependencies and build caches
+node_modules/
+__pycache__/
+.venv/
+
+# Generated local stores (rebuilt by backend/ingest.py and by the LangGraph checkpointer)
+chroma/
+*.db
+*.log
+
+# Deploy tooling local state
+.vercel/
