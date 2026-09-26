@@ -255,12 +255,17 @@ class ContextBuilder:
             )
             # Read the documents only; no embedding function is needed for a metadata get, so this
             # never spends an embedding call and never needs a key.
+            failures: List[str] = []
             for name in ("corpus_openai", "corpus_local"):
+                # Read each collection inside its own guard, so a failure on one (a transient
+                # compaction collision, a missing collection) falls through to the other rather
+                # than straight to snippets.
                 try:
                     collection = client.get_collection(name=name)
-                except Exception:
+                    got = collection.get(include=["documents", "metadatas"])
+                except Exception as exc:
+                    failures.append(f"{name}: {type(exc).__name__}")
                     continue
-                got = collection.get(include=["documents", "metadatas"])
                 for text, meta in zip(got.get("documents") or [], got.get("metadatas") or []):
                     source_id = (meta or {}).get("source_id", "")
                     if source_id and text:
@@ -271,8 +276,21 @@ class ContextBuilder:
                     self.available = True
                     self.detail = f"chunks read from {name}"
                     break
+            if not self.available:
+                # Never leave this blank: a degraded run that looks normal in the artifact is worse
+                # than a degraded run that says so. The scores are still real, but they were judged
+                # against 240-character snippets rather than whole passages, and a reader of
+                # results.json has to be able to see that without re-running anything.
+                self.detail = (
+                    "DEGRADED: no collection could be read "
+                    f"({', '.join(failures) or 'no collections found'}); "
+                    "snippets used as judge context instead of whole chunks"
+                )
         except Exception as exc:
-            self.detail = f"index unavailable ({type(exc).__name__}: {exc}); snippets used instead"
+            self.detail = (
+                f"DEGRADED: index unavailable ({type(exc).__name__}: {exc}); "
+                "snippets used as judge context instead of whole chunks"
+            )
 
     @staticmethod
     def _body_of(text: str, source_id: str, title: str) -> str:
@@ -708,6 +726,7 @@ def main() -> int:
             "judge_context_excluded_source_ids": excluded,
             "judge_context_chunks": len(contexts),
             "judge_context_chars": sum(len(c) for c in contexts),
+            "judge_context_degraded": not context_builder.available,
             "checks": [],
             "reported": {},
             "scores": {},

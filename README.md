@@ -44,6 +44,33 @@ Read that payload rather than the status code. `commit` is how you tell which bu
 compare it to `git rev-parse --short origin/main`. `vector_backend` reads `openai` once an OpenAI key is
 configured and `corpus_openai` has been populated, and `local` when it is running on the fallback embeddings.
 
+## Try it
+
+| | |
+|---|---|
+| Open this | https://floorguide.vercel.app |
+| It talks to this | https://floorguide-3avql.ondigitalocean.app |
+
+There is a short guide for a non-technical tester in **[docs/tester_guide.md](docs/tester_guide.md)** — a
+ten-minute walk-through, things worth trying to break, and the honest limits of the prototype.
+
+If you only have a minute, ask these three. Each one demonstrates a different guarantee.
+
+1. **"What are the lockout steps before I change the hydraulic filter on P-102?"**
+   The chip should read *Routed to: Safety procedures* and cite SP-01. The sentence names a maintenance task and a
+   machine, and it still goes to the safety shelf — a safety procedure wins the tie.
+
+2. **"Is P-102 due for service?"**
+   Watch the numbers: OVERDUE by 30 hours, 280 hours run against a 250-hour interval. Those come from a fixed
+   calculation, not from the model. A work-order draft then appears and **waits** — Approve returns a
+   confirmation id, Reject throws it away and nothing is filed.
+
+3. **"Is there a maintenance override mode for Line 3?"**
+   Look for the notice *1 document dropped*. A planted "tip sheet" in the documents tries to give the system
+   orders; it is thrown out before the model reads it, and the screen tells you one was dropped.
+
+Every document, machine and person is invented, and nothing leaves the system without a human click.
+
 ## Run it locally
 
 First, one file: copy `.env.example` to `.env` and fill in the two API keys. `.env` is git-ignored and is never

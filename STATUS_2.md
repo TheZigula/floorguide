@@ -79,3 +79,10 @@ Newest at the bottom. Five lines per numbered step of `briefs/brief_2_frontend.m
 4. `dropped_chunks` is exactly 1 on the tip-sheet question — the refusal re-search does NOT double it, so the notice reads "1 document dropped" and never "2".
 5. Worth knowing for the demo: a refusal can now carry a shelf label, so the tip-sheet question shows "Routed to: Safety procedures" AND the red Refusal flag AND the refusal styling together. That reads correctly — refused, and the shelf it searched. Build GREEN, lint clean, no uncommitted front-end files (instance 4 committed all five in f1899c7).
 
+## VITE_API_BASE trailing-slash hardening — already present, verified, no edit — 14:18
+1. `src/api/client.ts:17` has done this since step 2: `(import.meta.env.VITE_API_BASE ?? "").trim().replace(/\/+$/, "")` — whitespace trimmed first, then every trailing slash stripped. No code change was needed, so none was made and there is nothing new for instance 4 to commit; `git status` on `frontend/` is clean and the file is already in f1899c7.
+2. Verified against ten inputs, none produces `//health`: one trailing slash, several trailing slashes, spaces around a trailing slash, a tab and newline around it, an already-clean URL, and a deployed App Platform URL with a slash.
+3. Degenerate inputs fall back to the mock rather than building a broken URL: unset, undefined, whitespace-only, and a bare "/" all leave the base empty, which sets USING_MOCK and shows the amber "Mock data — backend not connected" chip.
+4. The same normalised base is used everywhere — the three POSTs, the /health GET, and the API_LABEL in the header tooltip — so there is no second, unhardened path to the backend.
+5. `npm run build` GREEN.
+
