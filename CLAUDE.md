@@ -162,6 +162,20 @@ A floor supervisor at a plant asks a question in plain words; FloorGuide routes 
     ### The Vercel project landed in team scope `cap-per`, not the personal scope
         `vercel link` created `cap-per/floorguide`. The public URL and any `vercel env add` must use that scope, and the
         origin added to CORS_ORIGINS is the cap-per one.
+    ### App Platform env vars are PLAIN TEXT unless "Encrypt" is ticked per variable (found minute ~95)
+        Adding OPENAI_API_KEY / ANTHROPIC_API_KEY on the component page WITHOUT ticking Encrypt stores them as
+        general variables: `doctl apps spec get <app-id>` then prints both live keys in full. An encrypted one shows
+        `type: SECRET` and a `EV[1:...]` ciphertext value instead. Check with a boolean test, never by printing the value:
+        a var whose value does not start with `EV[` and has no `type: SECRET` is exposed. Tick Encrypt, save, re-check.
+        Because the plaintext was already stored in the app's spec/deployment history, ROTATE both keys after encrypting.
+        Also prefer scope RUN_TIME over RUN_AND_BUILD_TIME: the backend reads the keys at runtime only, and
+        RUN_AND_BUILD_TIME additionally exposes them to the build environment.
+    ### `Â§` in a PowerShell smoke test is PowerShell, not the backend
+        PS 5.1 `Invoke-RestMethod`/`Invoke-WebRequest` decode a response as ISO-8859-1 when the Content-Type
+        declares no charset, and FastAPI returns bare `application/json`. So `MM-P102 §4.2` prints as `MM-P102 Â§4.2`
+        on the console while the bytes on the wire are correct. Verified at byte level: the section sign is `0xC2 0xA7`,
+        correct UTF-8, NOT double-encoded `0xC3 0x82 0xC2 0xA7`. Browsers read JSON as UTF-8 per spec, so the page is fine.
+        Do not "fix" the backend for this. To check properly, read the raw bytes, not the PowerShell string.
     <add hazards as they happen; one ### per hazard>
 
     ### Keys come from .env at the repo root, NOT from the shell (minute 30 finding)
