@@ -177,14 +177,14 @@ A floor supervisor at a plant asks a question in plain words; FloorGuide routes 
         correct UTF-8, NOT double-encoded `0xC3 0x82 0xC2 0xA7`. Browsers read JSON as UTF-8 per spec, so the page is fine.
         Do not "fix" the backend for this. To check properly, read the raw bytes, not the PowerShell string.
     ### Piping a value into `vercel env add` from PowerShell 5.1 prepends a UTF-8 BOM, and `.trim()` in the source will NOT save you
-        `'https://...' | vercel env add VITE_API_BASE production` stored the value as `﻿https://...`. The public page then
+        `'https://...' | vercel env add VITE_API_BASE production` stored the value as `<BOM>https://...`. The public page then
         showed "Backend unreachable" and 404s while the cloud /health was healthy — the classic wrong-base-address symptom.
         `frontend/src/api/client.ts` already did `(...).trim().replace(/\/+$/,"")`, and JS `trim()` does strip U+FEFF at runtime,
         but the built bundle read `` ue=`<BOM>https://...`.replace(...) `` with NO `.trim()` left: the minifier CONSTANT-FOLDED
         the trim at build time and its fold did not treat U+FEFF as whitespace, so the BOM was baked into the literal.
         FIX: keep the value clean at the source. Write it to a file with `UTF8Encoding($false)` and no trailing newline, then
         `cmd /c "vercel env add NAME production < file"`, which sends byte-exact stdin. VERIFY by fetching the served bundle and
-        printing the characters around the URL escaped, never with a substring `-like` match — a substring test passes with a BOM present.
+        printing the characters around the URL escaped, then comparing by EXACT match — never a substring test, which passes with a BOM present.
     <add hazards as they happen; one ### per hazard>
 
     ### Keys come from .env at the repo root, NOT from the shell (minute 30 finding)
