@@ -63,6 +63,23 @@
   .strip h3{margin:0 0 8px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700}
   .strip p{margin:0;font-size:16px;line-height:1.5;font-weight:500}
 
+  /* ---------- ROI ---------- */
+  .roi{margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px 26px 18px;box-shadow:0 10px 30px rgba(15,23,42,.06)}
+  .roi-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+  .roi-head h2{font-family:Fraunces,Georgia,serif;font-size:22px;margin:0;letter-spacing:-.01em}
+  .roi-head p{margin:0;color:var(--muted);font-size:13px}
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .tile{background:#fbfaf7;border:1px solid var(--line);border-radius:12px;padding:16px 16px 14px}
+  .tile.accent{background:var(--ink-2);border-color:#243047;color:#d5dce8}
+  .tile .big{font-family:Fraunces,Georgia,serif;font-weight:700;font-size:30px;line-height:1;letter-spacing:-.01em;color:var(--ink)}
+  .tile.accent .big{color:var(--safety)}
+  .tile .lbl{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);margin:8px 0 8px}
+  .tile.accent .lbl{color:#a8b3c7}
+  .tile p{margin:0;font-size:13.5px;line-height:1.5}
+  .assume{margin:14px 0 0;font-size:12.5px;color:var(--muted);line-height:1.5}
+  @media (max-width:760px){ .tiles{grid-template-columns:1fr} }
+  @media print{ .roi{padding:14px 18px} .tile .big{font-size:24px} .tile p{font-size:11.5px} }
+
   /* ---------- footer ---------- */
   .foot{margin-top:18px;background:var(--ink);color:#c8d1e0;border-radius:var(--radius);padding:16px 22px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:13px;line-height:1.5}
   .foot strong{color:#fff}
@@ -151,6 +168,31 @@
       <h3>After</h3>
       <p>One question. One answer with its source. One button for the work order. The safety procedure always wins.</p>
     </div>
+  </section>
+
+  <section class="roi">
+    <div class="roi-head">
+      <h2>What it is worth</h2>
+      <p>Illustrative numbers, written so they can be swapped for the plant's own.</p>
+    </div>
+    <div class="tiles">
+      <div class="tile">
+        <div class="big">~40 min</div>
+        <div class="lbl">back per supervisor, per shift</div>
+        <p>About six documentation questions a shift, each down from roughly eight minutes (walk, look up, ask around) to about one.</p>
+      </div>
+      <div class="tile">
+        <div class="big">~2,000 hrs</div>
+        <div class="lbl">a year, across the plant</div>
+        <p>Six supervisors, two shifts, 250 working days. Time that goes back to the line instead of the office.</p>
+      </div>
+      <div class="tile accent">
+        <div class="big">1 missed service</div>
+        <div class="lbl">is the real cost</div>
+        <p>A filter run 30 hours past its interval is how a pump starts to fail. One unplanned press stop costs more than a year of this. A wrong guess on a lockout step costs more than money.</p>
+      </div>
+    </div>
+    <p class="assume">How to make these real: count a week of shift-log questions and minutes per answer; use the plant's own figure for an hour of unplanned downtime.</p>
   </section>
 
   <footer class="foot">

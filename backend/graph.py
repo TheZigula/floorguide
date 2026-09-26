@@ -176,12 +176,41 @@ _BYPASS_VERB = r"(skip|bypass|defeat|disable|override|ignore|shorten|jump|forget
 _SAFETY_NOUN = r"(lockout|lock out|loto|tag ?out|interlock|e-?stop|emergency stop|guard|ppe|permit|confined space|sign-?off|safety step|safety procedure)"
 _BYPASS_RE = re.compile(_BYPASS_VERB + r"\b[^.?!]{0,40}\b" + _SAFETY_NOUN, re.IGNORECASE)
 _ASSET_RE = re.compile(r"\b([A-Z]{1,2}-\d{1,4})\b")
+
+# THE SHELF IS DECIDED BY THE KIND OF ANSWER WANTED, NOT BY THE NOUNS IN THE SENTENCE.
+# "What are the lockout steps before I change the hydraulic filter on P-102?" is a safety
+# question that happens to name a machine and a maintenance task. The classifier kept voting
+# maintenance on the nouns, so the safety shelf was never searched and the retriever refused a
+# question SP-01 answers. These topics mean safety even in that company, and safety wins ties
+# because a safety procedure outranks a manual (source precedence).
+_SAFETY_TOPIC_RE = re.compile(
+    r"\b("
+    r"lock ?out|loto|tag ?out|lock and tag|"
+    r"ppe|personal protective|"
+    r"e-?stop|emergency stop|"
+    r"interlock|light curtain|two-hand|"
+    r"guard|guards|guarding|guarded|"
+    r"pinch point|"
+    r"confined space|"
+    r"spill|"
+    r"zero energy|energy isolation|isolate the energy|stored energy|"
+    r"restart after|after a fault|"
+    r"permit to work|hot work"
+    r")\b",
+    re.IGNORECASE,
+)
 _LINE_RE = re.compile(r"\bline\s+([A-Za-z0-9][A-Za-z0-9-]{0,15})\b", re.IGNORECASE)
 
 
 def is_safety_bypass(text: str) -> bool:
     """A request to skip a safety step. Code decides this, not the model."""
     return bool(_BYPASS_RE.search(text or ""))
+
+
+def is_safety_topic(text: str) -> bool:
+    """Does this question want a safety answer? Code decides, so a machine id in the sentence
+    cannot outvote the lockout procedure."""
+    return bool(_SAFETY_TOPIC_RE.search(text or ""))
 
 
 def extract_asset_id(text: str) -> Optional[str]:
@@ -263,9 +292,18 @@ def route_from_supervisor(state: FloorGuideState) -> str:
 # --------------------------------------------------------------------------------------
 CATEGORY_SYSTEM = """Which kind of plant document answers this question? Reply with ONE word, nothing else.
 
-safety       lockout/tagout, PPE, emergency stop, guarding, pinch points, confined space, permits, restart after a fault.
-maintenance  service intervals, lubrication, filters, seals, symptoms and diagnosis, machine manuals and their sections.
-quality      tolerances, dimensions, inspection frequency, nonconformance, hold tags, first-piece checks."""
+Decide by the KIND OF ANSWER WANTED, not by the nouns in the sentence. A machine id like P-102 or
+a maintenance task like "change the filter" does NOT make a question a maintenance question.
+"What are the lockout steps before I change the filter on P-102?" wants a safety procedure: answer
+safety. If a question wants both, answer safety, because a safety procedure outranks a manual.
+
+safety       lockout/tagout, isolating or releasing energy, PPE, emergency stop, restart after a
+             fault, interlocks, guarding, pinch points, confined space, spills, permits. Anything
+             about what must be done BEFORE or AFTER working on a machine to make it safe.
+maintenance  service intervals, lubrication, filters, seals, symptoms and diagnosis, meter
+             readings, machine manuals and their sections. HOW a machine is serviced.
+quality      tolerances, dimensions, inspection frequency, nonconformance, hold tags, gage
+             calibration, first-piece checks."""
 
 RETRIEVER_SYSTEM = """You are the document worker for FloorGuide, used by a manufacturing floor supervisor.
 Answer ONLY from the passages given below. They are the plant's own documents.
@@ -292,6 +330,9 @@ def retriever_node(state: FloorGuideState) -> dict:
 
     if bypass:
         category = "safety"              # a bypass question is always answered from the procedure
+    elif is_safety_topic(question):
+        category = "safety"              # the kind of answer wanted beats the nouns; safety wins ties
+        log.info("safety topic found in the question; searching the safety procedures first")
     else:
         raw = _chat(ROUTER_MODEL, CATEGORY_SYSTEM, question, max_tokens=8).lower()
         category = next((c for c in ("safety", "maintenance", "quality") if c in raw), "maintenance")
@@ -299,10 +340,7 @@ def retriever_node(state: FloorGuideState) -> dict:
     found = call_tool("retriever", "vector_search", query=question, category=category, k=4)
     dropped, backend = found["dropped"], found["source_backend"]
 
-    # Asset records are structured data, not prose authority: the analyst reads them as fields,
-    # and the retriever never answers out of one. Dropping them here also keeps routed_to inside
-    # the three labels a supervisor recognises.
-    hits = [h for h in found["hits"] if h["category"] != "asset_record"]
+    hits = _answerable(found["hits"])
 
     # The label follows the source ACTUALLY USED, not the guess made before searching, so
     # "Routed to: Safety procedures" is true even when the classifier guessed maintenance.
@@ -318,6 +356,35 @@ def retriever_node(state: FloorGuideState) -> dict:
         log.info("routed_to corrected from the %s guess to %s, the shelf the answer came from",
                  category, label)
 
+    answer = _answer_from(hits, question)
+    refused = answer.startswith(REFUSAL_MARKER)
+
+    # A REFUSAL IS A TRIGGER, NOT AN ANSWER. A chunk can sit close to the question and still not
+    # contain the answer -- MM-P102 is near "lockout steps before I change the filter on P-102"
+    # without holding the lockout steps, so the distance floor alone never widened. Before the
+    # supervisor is told no, look on every shelf. Refuse only if that finds nothing either.
+    if refused and category and not found["widened"]:
+        wider = call_tool("retriever", "vector_search", query=question, category=None, k=4)
+        wider_hits = _answerable(wider["hits"])
+        # Both searches screen the same wider neighbourhood, so take the larger count rather
+        # than adding them: one instruction-shaped document must not be reported as two.
+        dropped = max(dropped, wider["dropped"])
+        if wider_hits and {h["chunk_id"] for h in wider_hits} != {h["chunk_id"] for h in hits}:
+            log.info("refusal on the %s shelf; re-searching every category before refusing", category)
+            second = _answer_from(wider_hits, question)
+            if not second.startswith(REFUSAL_MARKER):
+                hits, answer, refused = wider_hits, second, False
+                used = hits[0]["category"]
+                label = used if used in ("safety", "maintenance", "quality") else category
+                log.info("the wider search answered it from %s (%s)", hits[0]["source_id"], label)
+            else:
+                hits, answer = wider_hits, second   # show what was searched, then refuse
+                label = "refused"
+        elif not wider_hits:
+            label = "refused"
+        else:
+            label = "refused"
+
     sources = [
         {
             "source_id": h["source_id"],
@@ -328,24 +395,6 @@ def retriever_node(state: FloorGuideState) -> dict:
         }
         for h in hits
     ]
-
-    if not hits:
-        answer = (
-            REFUSAL_MARKER + " I have no passage in the plant corpus that answers that. "
-            "Nothing here is a substitute for the binder on the floor."
-        )
-        refused = True
-    else:
-        passages = "\n\n".join(
-            "[" + h["source_id"] + "] " + h["title"]
-            + " (category=" + str(h["category"]) + ", authority=" + str(h["authority"])
-            + ", stale=" + str(h["stale"]) + ")\n" + h["text"]
-            for h in hits
-        )
-        answer = _chat(
-            AGENT_MODEL, RETRIEVER_SYSTEM, "PASSAGES:\n" + passages + "\n\nQUESTION: " + question
-        )
-        refused = answer.startswith(REFUSAL_MARKER)
 
     if bypass:
         # Code prepends the refusal; the model never gets to decide whether a bypass is allowed.
@@ -367,6 +416,30 @@ def retriever_node(state: FloorGuideState) -> dict:
         "refused": refused,
         "messages": [AIMessage(content=answer)],
     }
+
+
+def _answerable(hits: list) -> list:
+    """Asset records are structured data, not prose authority: the retriever never answers out
+    of one. Keeping them out also keeps routed_to inside the three labels a supervisor knows."""
+    return [h for h in hits if h["category"] != "asset_record"]
+
+
+def _answer_from(hits: list, question: str) -> str:
+    """Write the answer from these passages, or refuse if there are none."""
+    if not hits:
+        return (
+            REFUSAL_MARKER + " I have no passage in the plant corpus that answers that. "
+            "Nothing here is a substitute for the binder on the floor."
+        )
+    passages = "\n\n".join(
+        "[" + h["source_id"] + "] " + h["title"]
+        + " (category=" + str(h["category"]) + ", authority=" + str(h["authority"])
+        + ", stale=" + str(h["stale"]) + ")\n" + h["text"]
+        for h in hits
+    )
+    return _chat(
+        AGENT_MODEL, RETRIEVER_SYSTEM, "PASSAGES:\n" + passages + "\n\nQUESTION: " + question
+    )
 
 
 # --------------------------------------------------------------------------------------
