@@ -85,6 +85,20 @@ CONTROL_METRICS = ("faithfulness",)
 # The judge's own output budget. See the comment where the llm is built.
 JUDGE_MAX_OUTPUT_TOKENS = 4096
 
+# Printed on every run and recorded in results.json. An audit read the below-threshold list as an
+# unenforced pass mark, i.e. as a gate someone had quietly switched off. It is not one: the judge
+# thresholds were never load-bearing, by design, because a judge score is evidence about wording and
+# the things that must not regress are arithmetic and string presence. Saying so in the artifact is
+# cheaper than having the question asked again.
+GATE_POLICY = (
+    "GATE POLICY: the per-case judge thresholds in thresholds.json are ADVISORY. They are printed "
+    "and recorded as evidence and they do NOT gate the build. The gate is the code-graded half "
+    "(rule, refusal, injection) plus the must-fail control. Exactly four things make this run exit "
+    "nonzero: a grader:code case failing, a case that could not be scored (scored != attempted), an "
+    "empty golden set, or the must-fail control not failing. A retrieval case below its threshold is "
+    "therefore a reported observation, NOT an unenforced pass mark."
+)
+
 
 # --- logging hygiene -----------------------------------------------------------------------------
 
@@ -629,7 +643,12 @@ def main() -> int:
     try:
         from dotenv import load_dotenv
 
-        load_dotenv(REPO_ROOT / ".env")  # keys live in .env at the repo root, not in the shell
+        # Keys live in .env at the repo root, not in the shell, so .env WINS. override=True is load
+        # bearing: without it a stale OPENAI_API_KEY already exported in the terminal shadows a
+        # rotated key in .env, and every judge call dies 401 token_invalidated while .env holds a
+        # working key. That cost a run. It is safe in deployment too, because App Platform has no
+        # .env file, so this call is a no-op there and the platform's own env vars still win.
+        load_dotenv(REPO_ROOT / ".env", override=True)
     except ImportError:
         pass
     _quiet_libraries()
@@ -933,6 +952,7 @@ def main() -> int:
             "code_graded_passed": len(code_passed),
             "code_graded_total": len(code_rows),
         },
+        "gate_policy": GATE_POLICY,
         "control": control_verdict,
         "subtle_control": (subtle_row or {}).get("subtle_control"),
         "subtle_control_faithfulness": (subtle_row or {}).get("scores", {}).get("faithfulness"),
@@ -978,6 +998,8 @@ def main() -> int:
             f"JUDGE_CALIBRATION: subtle_control={subtle_row.get('subtle_control')} "
             f"faithfulness={round(faith, 3) if _is_number(faith) else faith}"
         )
+
+    print(f"\n{GATE_POLICY}")
 
     aggregate_text = " ".join(f"{k}={v}" for k, v in aggregate.items())
     print(

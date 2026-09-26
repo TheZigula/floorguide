@@ -26,8 +26,15 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 from dotenv import load_dotenv  # noqa: E402 - must run before anything reads os.environ
 
-load_dotenv(REPO_ROOT / ".env")  # explicit path: bare load_dotenv() walks the caller's stack
-#                                  frame and looks in the process cwd, which uvicorn may change.
+# override=True is deliberate and load-bearing. CLAUDE.md's rule is that keys come from .env at
+# the repo root, NOT from the shell, and python-dotenv does the OPPOSITE by default: it leaves an
+# already-exported variable alone. These terminals carry a stale OPENAI_API_KEY that was rotated in
+# .env, so without override every process started here silently used the dead value while .env held
+# a working one -- identical from the outside to a key that simply died. Safe in deployment: App
+# Platform has no .env file, so this call is a no-op there and the platform's own env vars still win.
+# The explicit path matters too: bare load_dotenv() walks the caller's stack frame and looks in the
+# process cwd, which uvicorn may change.
+load_dotenv(REPO_ROOT / ".env", override=True)
 
 from contextlib import asynccontextmanager  # noqa: E402
 
@@ -39,7 +46,7 @@ from langgraph.types import Command  # noqa: E402
 
 from backend import guards  # noqa: E402
 from backend.graph import build_graph, read_home_line  # noqa: E402
-from backend.tools.vector_search import index_status, probe_backend  # noqa: E402
+from backend.tools.vector_search import index_status, last_backend_used, probe_backend  # noqa: E402
 
 log = guards.get_logger(__name__)
 
@@ -91,7 +98,10 @@ def _startup_ingest() -> None:
         for name, info in (summary.get("collections") or {}).items()
     }
     INDEX["ready"] = bool(summary.get("ready"))
-    INDEX["backend"] = str(summary.get("vector_backend") or "none")
+    # ensure_ingested reports "openai" whenever both collections are already full, because
+    # nothing needed re-embedding -- it never proves a live query can embed. Probe once at boot
+    # so /health is truthful from the first second, not only after the first search.
+    INDEX["backend"] = probe_backend() if INDEX["ready"] else str(summary.get("vector_backend") or "none")
     log.info(
         "ingest: %s documents + %s asset records -> %s chunks (%s written, %s skipped) "
         "in %ss; collections=%s backend=%s ready=%s",
@@ -170,7 +180,8 @@ def health() -> guards.HealthResponse:
         status="ok" if INDEX["ready"] else "degraded",
         service=SERVICE_NAME,
         commit=_commit(),
-        vector_backend=INDEX["backend"],
+        # what a search ACTUALLY used most recently, not what was latched at boot
+        vector_backend=last_backend_used() or INDEX["backend"],
         index_ready=bool(INDEX["ready"]),
         chunks=INDEX["chunks"],
     )
@@ -200,14 +211,26 @@ def chat(req: guards.ChatRequest) -> guards.ChatResponse:
             thread_id=req.thread_id,
             worker="refuse",
             routed_to="refused",
-            answer="REFUSED: this run hit its " + exc.cap + " and was stopped before finishing. "
-                   "Ask again, or ask a narrower question.",
+            answer=guards.scrub(
+                "REFUSED: this run hit its " + exc.cap + " and was stopped before finishing. "
+                "Ask again, or ask a narrower question."
+            ),
             refused=True,
             memory={"home_line": read_home_line(req.user_id)},
         )
     except guards.ModelUnavailable as exc:
         log.error("model unavailable: %s", exc)
-        raise HTTPException(status_code=502, detail="a model call failed: " + str(exc)) from exc
+        raise HTTPException(
+            status_code=502, detail=guards.scrub("a model call failed: " + str(exc))
+        ) from exc
+    except guards.IndexNotReady as exc:
+        # The index went away after startup -- an expired key, a collection that vanished. Say
+        # that, rather than telling a supervisor the corpus does not cover her question.
+        log.error("index not ready mid-run: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail=guards.scrub("the document index cannot be searched right now: " + str(exc)),
+        ) from exc
 
     return _chat_response(req, state)
 
@@ -272,9 +295,18 @@ def _resume(config: dict, decision: dict) -> dict:
             with _turn_lock:
                 return GRAPH.invoke(Command(resume=decision), config)
     except guards.ModelUnavailable as exc:
-        raise HTTPException(status_code=502, detail="a model call failed: " + str(exc)) from exc
+        raise HTTPException(
+            status_code=502, detail=guards.scrub("a model call failed: " + str(exc))
+        ) from exc
     except guards.BudgetExceeded as exc:
-        raise HTTPException(status_code=502, detail="run stopped by the " + exc.cap) from exc
+        raise HTTPException(
+            status_code=502, detail=guards.scrub("run stopped by the " + exc.cap)
+        ) from exc
+    except guards.IndexNotReady as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=guards.scrub("the document index cannot be searched right now: " + str(exc)),
+        ) from exc
 
 
 def _pending_interrupt(snapshot) -> object:

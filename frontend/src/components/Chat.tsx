@@ -13,6 +13,11 @@ export interface Turn {
   id: string;
   role: "user" | "assistant" | "note";
   text: string;
+  /**
+   * For a note: whether it is the system confirming something or reporting a failure.
+   * A backend fault must never look like an approval confirmation.
+   */
+  tone?: "info" | "error";
   routedTo?: RoutedTo;
   refused?: boolean;
   /** The draft this turn produced, so the approval card stays attached to it in the transcript. */
@@ -32,9 +37,16 @@ function TurnView({ turn }: { turn: Turn }) {
   }
 
   if (turn.role === "note") {
+    const failed = turn.tone === "error";
     return (
       <div className="turn turn--note">
-        <div className="bubble bubble--note">{turn.text}</div>
+        <div
+          className={"bubble bubble--note" + (failed ? " bubble--note-error" : "")}
+          role={failed ? "alert" : undefined}
+        >
+          {failed ? <span className="bubble__notelabel">Could not complete</span> : null}
+          {turn.text}
+        </div>
       </div>
     );
   }

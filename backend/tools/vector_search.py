@@ -130,7 +130,7 @@ def _rows(result: dict, source_backend: str) -> list[dict]:
                 "chunk_id": chunk_id,
                 "source_id": str(source_id),
                 "title": str(title),
-                "category": str(meta.get("category") or "uncategorised"),
+                "category": _known_category(meta.get("category")),
                 "authority": int(meta.get("authority") or 2),
                 "stale": bool(meta.get("stale")),
                 "text": text or "",
@@ -140,6 +140,17 @@ def _rows(result: dict, source_backend: str) -> list[dict]:
             }
         )
     return rows
+
+
+# The screen composes source_id + title + text (guards.model_facing_text). `category` is also
+# spliced into the passage header, so it is clamped to a known value here rather than passed
+# through: front matter does not get to write free text into a model prompt.
+KNOWN_CATEGORIES = ("safety", "maintenance", "quality", "asset_record")
+
+
+def _known_category(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    return text if text in KNOWN_CATEGORIES else "uncategorised"
 
 
 def _snippet(text: str) -> str:
@@ -171,18 +182,25 @@ def vector_search(
     the category filter would have hidden it. Chunks from that pass are screened and
     counted, never answered from.
     """
+    # AN OUTAGE IS NOT AN ANSWER (audit H2). An empty result means "nothing matched", and the
+    # retriever turns that into "the plant corpus does not cover that" -- a confident factual
+    # claim about the corpus. If the index cannot be searched at all, say so with a typed error
+    # and let app.py return the 503 it was designed for, rather than inventing a finding.
     backend, embedding = _embed(query)
     if embedding is None or len(embedding) == 0:
-        log.error("no embedding backend available; returning no hits")
-        return _result([], 0, backend, False, category)
+        raise guards.IndexNotReady(
+            "no embedding backend is available: neither OpenAI nor the local model could embed "
+            "the question, so the corpus cannot be searched"
+        )
 
     collection_name = OPENAI_COLLECTION if backend == "openai" else LOCAL_COLLECTION
     ef = _openai_ef() if backend == "openai" else _local_ef()
     try:
         collection = _get_collection(collection_name, ef)
-    except Exception as exc:  # noqa: BLE001 - a missing collection is a normal cold start
-        log.error("collection %s unavailable: %s", collection_name, exc)
-        return _result([], 0, backend, False, category)
+    except Exception as exc:  # noqa: BLE001
+        raise guards.IndexNotReady(
+            "collection " + collection_name + " cannot be opened (" + type(exc).__name__ + ")"
+        ) from exc
 
     # The whole-corpus neighbourhood is fetched either way: it is the widened search when the
     # shelf guess misses, and the screen sweep when it holds. One embedding, two index lookups.
@@ -226,6 +244,8 @@ def vector_search(
 def _result(hits: list[dict], dropped: int, backend: str, widened: bool, guess: Optional[str]) -> dict:
     """`category_used` is the category of the BEST SOURCE ACTUALLY USED, so the label the screen
     shows is always true, rather than the category a classifier guessed before searching."""
+    global _last_backend_used
+    _last_backend_used = backend
     log.info(
         "vector_search backend=%s guess=%s widened=%s hits=%s dropped=%s used=%s",
         backend, guess, widened, len(hits), dropped, hits[0]["category"] if hits else None,
@@ -254,6 +274,18 @@ def _embed(query: str) -> tuple[str, Any]:
     except Exception as exc:  # noqa: BLE001
         log.error("local embedding unavailable too (%s: %s)", type(exc).__name__, exc)
         return "local", None
+
+
+# The backend the LAST real search actually used. /health reports this in preference to the
+# value latched at startup: ensure_ingested can report "openai" because both collections are
+# already full and nothing needed re-embedding, while every live query falls back to local
+# because the key died after boot. That happened in this session, and a health check that says
+# openai while the sources panel says local is a health check nobody can trust.
+_last_backend_used: Optional[str] = None
+
+
+def last_backend_used() -> Optional[str]:
+    return _last_backend_used
 
 
 @lru_cache(maxsize=1)

@@ -192,12 +192,43 @@ def looks_like_injection(text: str) -> Optional[str]:
     return None
 
 
+def model_facing_text(chunk: Any) -> Optional[str]:
+    """The exact string a model will be shown for this chunk, or None if it cannot be read.
+
+    The screen used to inspect the body alone, while the passage handed to the model leads with
+    the document's TITLE -- untrusted front matter copied verbatim out of the corpus file. A
+    directive in a title therefore reached the model ahead of the body with nothing reported
+    dropped (audit H1). Screening the composed string closes that: whatever the model is shown
+    is what gets screened.
+    """
+    if not isinstance(chunk, dict):
+        return None
+    text = chunk.get("text")
+    if not isinstance(text, str) or not text.strip():
+        return None
+    return str(chunk.get("source_id") or "") + " " + str(chunk.get("title") or "") + "\n" + text
+
+
 def screen_chunks(chunks: Iterable[dict]) -> tuple[list[dict], int]:
-    """Drop instruction-shaped chunks BEFORE a model sees them. Returns (kept, dropped)."""
+    """Drop instruction-shaped chunks BEFORE a model sees them. Returns (kept, dropped).
+
+    FAILS CLOSED. A chunk whose text is missing, None, empty or not a string is dropped and
+    counted rather than kept unread (audit M1): a chunk nobody can screen is not a chunk anybody
+    should answer from, and staying silent about it would under-report the drop count.
+    """
     kept: list[dict] = []
     dropped = 0
     for chunk in chunks:
-        verdict = looks_like_injection(chunk.get("text") or "")
+        composed = model_facing_text(chunk)
+        if composed is None:
+            dropped += 1
+            log.warning(
+                "dropped chunk %s from %s: it has no readable text, so it cannot be screened",
+                (chunk.get("chunk_id", "?") if isinstance(chunk, dict) else "?"),
+                (chunk.get("source_id", "?") if isinstance(chunk, dict) else "?"),
+            )
+            continue
+        verdict = looks_like_injection(composed)
         if verdict:
             dropped += 1
             log.warning(

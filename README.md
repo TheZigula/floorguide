@@ -154,6 +154,34 @@ Four things in that setup are deliberate and easy to undo by accident:
 - **`doctl apps update --spec .do/app.yaml` would delete the two API keys**, because they exist only in the
   dashboard and not in that file. Any spec change starts from `doctl apps spec get`.
 
+## Audit
+
+The prototype was audited against its own contract. The full record, with file and line references for every
+finding, is in **[docs/audit_f1899c7.md](docs/audit_f1899c7.md)**.
+
+**Fixed:** H1 (a document's title reached the model unscreened, and the screen reported nothing dropped),
+H2 (a corpus outage was reported to the supervisor as "the plant corpus does not cover that"), M1 (the injection
+screen failed open on a chunk it could not read), and M7 (exception text reached the client screen unscrubbed).
+
+### Known, not yet fixed
+
+Listed because a prototype that hides its open findings is worth less than one that names them. None of these is
+reachable from the demo script, and the scripted injection, bypass, rule and approval paths were each verified
+against the deployed build.
+
+- **M2** — The "is this thread paused?" check sits outside the lock that serialises turns.
+- **M3** — Every failure that is not `ModelUnavailable` or `BudgetExceeded` is an untyped 500.
+- **M4** — The cost cap silently does not count a model call that reports no usage.
+- **M5** — `is_safety_bypass` refuses innocent safety questions.
+- **M6** — Values computed and never emitted.
+- **L1** — `dropped_chunks` is a ranking heuristic, not a fact.
+- **L2** — `worker: "refuse"` is outside the API contract.
+- **L3** — The per-worker allow-list is a convention, not a construction.
+- **L4** — Permissive default on an unparseable router reply.
+- **L5** — `extract_asset_id` matches document ids.
+- **L6** — Cap breaches answer inconsistently.
+- **L7** — `_commit()` catches only `OSError`.
+
 ## What I would add with a week
 
 **Deploy and operations**

@@ -423,13 +423,16 @@ def ensure_ingested(
     """
     started = time.time()
 
-    # Keys live in .env at the repo root, not in the shell. Loaded here rather than at import time
-    # so that importing this module does no work and has no side effects. load_dotenv does not
-    # override a variable that is already set, so a platform-provided key still wins in deployment.
+    # Keys live in .env at the repo root, not in the shell, so .env WINS. Loaded here rather than at
+    # import time so that importing this module does no work and has no side effects. override=True
+    # is load bearing: without it a stale OPENAI_API_KEY already exported in the terminal shadows a
+    # rotated key in .env, and embedding falls back to local while .env holds a working key. It is
+    # safe in deployment, because App Platform has no .env file, so this call is a no-op there and
+    # the platform's own env vars still win.
     try:
         from dotenv import load_dotenv
 
-        load_dotenv(REPO_ROOT / ".env")
+        load_dotenv(REPO_ROOT / ".env", override=True)
     except ImportError:  # python-dotenv is pinned; a missing one is not fatal for local embeddings
         _log(verbose, "note: python-dotenv is not installed; relying on the process environment")
 

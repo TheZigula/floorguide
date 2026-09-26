@@ -86,3 +86,10 @@ Newest at the bottom. Five lines per numbered step of `briefs/brief_2_frontend.m
 4. The same normalised base is used everywhere — the three POSTs, the /health GET, and the API_LABEL in the header tooltip — so there is no second, unhardened path to the backend.
 5. `npm run build` GREEN.
 
+## Backend 8fe470e: local-embedding fallback and the new typed 503 — 15:14
+1. The peer note said nothing here needed me; two of its changes land on my surface, so I checked rather than assumed, and one was a real defect. 24 checks across two runs, all pass.
+2. DEFECT FOUND AND FIXED (mine): a failed `/chat` rendered as the SAME grey dashed bubble as "Approved. Work order WO-SIM-1 recorded" — so the new 503 would have looked like a filing confirmation on camera. Error notes now get their own red style, an "COULD NOT COMPLETE" label, and `role="alert"`. Proved against a stub returning the real 503 shape: one error-styled bubble, never two, and the success note stays visibly different.
+3. The 503 wording now says what did NOT happen, which is the part that matters: "Nothing was drafted and nothing was filed. This is the document index, not your question." The backend's own `detail` is carried through in parentheses so it stays diagnosable.
+4. TRUTHFULNESS CONFIRMED on the live backend now running on local embeddings: every source card reads "Found by local fallback embeddings" and NOT "OpenAI embeddings", and the header chip reads `floorguide · commit 8fe470e · local vectors`. The screen reports the backend that actually searched, matching instance 1's H2 fix.
+5. Unaffected by the dead OpenAI key, verified live: safety -> SP-01/SP-03, quality -> QC-01/QC-02/QC-03, the tip sheet still drops exactly 1, and P-102 is still OVERDUE by 30 ending at an approval card. Build GREEN, lint clean. INSTANCE 4 to commit: `App.tsx`, `Chat.tsx`, `components.css`.
+

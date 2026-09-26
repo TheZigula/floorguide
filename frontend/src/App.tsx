@@ -43,6 +43,28 @@ interface ApprovalState {
   error: string | null;
 }
 
+/**
+ * Turn a failed call into something a supervisor can act on rather than a status code.
+ * Every branch says what did NOT happen, because the thing worth knowing about a failure
+ * here is that no work order was drafted or filed.
+ */
+function failureText(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 503) {
+      return (
+        "FloorGuide cannot search the plant documents right now, so it has not answered. " +
+        "Nothing was drafted and nothing was filed. This is the document index, not your question — " +
+        "try again shortly. (" + error.message + ")"
+      );
+    }
+    if (error.status === 0) {
+      return error.message + " Nothing was drafted and nothing was filed.";
+    }
+    return error.message + " Nothing was drafted and nothing was filed.";
+  }
+  return "FloorGuide could not be reached. Nothing was drafted and nothing was filed.";
+}
+
 /** What the status line should say once a reply has landed. */
 function phaseFor(response: ChatResponse): Phase {
   if (response.refused) return "refused";
@@ -98,11 +120,10 @@ export default function App() {
         ]);
         setPhase(phaseFor(response));
       } catch (error) {
-        const text =
-          error instanceof ApiError
-            ? error.message
-            : "FloorGuide could not be reached. Nothing was filed.";
-        setTurns((prior) => [...prior, { id: nextTurnId(), role: "note", text }]);
+        setTurns((prior) => [
+          ...prior,
+          { id: nextTurnId(), role: "note", text: failureText(error), tone: "error" },
+        ]);
         setPhase("error");
       } finally {
         setBusy(false);

@@ -616,3 +616,21 @@
 .source__snippet + .source__snippet {
   margin-top: -2px;
 }
+
+/* A backend failure must not look like an approval confirmation. */
+.bubble--note-error {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  border-style: solid;
+  border-left-width: 5px;
+  color: var(--danger);
+}
+
+.bubble__notelabel {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
