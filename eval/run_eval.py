@@ -953,6 +953,12 @@ def main() -> int:
             "code_graded_total": len(code_rows),
         },
         "gate_policy": GATE_POLICY,
+        # Provenance at the top level, not buried in backend_health: the SAME commit can now serve
+        # either retriever (openai when the embedding key resolves, the local MiniLM fallback when
+        # it does not), so "which commit" alone no longer identifies what produced these rows. A
+        # reader comparing this file against a live /health has to be able to see both at a glance.
+        "graded_commit": health.get("commit"),
+        "graded_vector_backend": health.get("vector_backend"),
         "control": control_verdict,
         "subtle_control": (subtle_row or {}).get("subtle_control"),
         "subtle_control_faithfulness": (subtle_row or {}).get("scores", {}).get("faithfulness"),
@@ -999,6 +1005,11 @@ def main() -> int:
             f"faithfulness={round(faith, 3) if _is_number(faith) else faith}"
         )
 
+    print(
+        f"\nPROVENANCE: these rows were produced by commit {health.get('commit')} retrieving with "
+        f"vector_backend={health.get('vector_backend')} at {args.api}. The same commit can serve "
+        f"either retriever, so the backend is named here as well as the commit."
+    )
     print(f"\n{GATE_POLICY}")
 
     aggregate_text = " ".join(f"{k}={v}" for k, v in aggregate.items())
